@@ -3,11 +3,13 @@ import { useState } from "react";
 
 export const App = () => {
   const [images, setImages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleImageChange = (e: any) => {
+    setIsLoading(true);
     const files = Array.from(e.target.files);
     const newImages: any = [];
-    files.forEach((file) => {
+    files.forEach((file: any) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
@@ -37,12 +39,20 @@ export const App = () => {
             newImages.push(url);
             if (newImages.length === files.length) {
               setImages(newImages);
+              setIsLoading(false);
             }
           }
         };
       };
-      reader.readAsDataURL(file as Blob);
+      reader.readAsDataURL(file);
     });
+  };
+
+  const handleImageReorder = (oldIndex: number, newIndex: number) => {
+    const reorderedImages = [...images];
+    const movedImage = reorderedImages.splice(oldIndex, 1)[0];
+    reorderedImages.splice(newIndex, 0, movedImage);
+    setImages(reorderedImages);
   };
 
   const generatePDF = () => {
@@ -59,7 +69,6 @@ export const App = () => {
 
     const promises = images.map((image) => loadImage(image));
 
-    // Ждем загрузки всех изображений
     Promise.all(promises)
       .then((loadedImages) => {
         loadedImages.forEach((image: any, i) => {
@@ -68,16 +77,9 @@ export const App = () => {
           }
 
           const aspectRatio = image.width / image.height;
-          const width = pdf.internal.pageSize.getWidth(); // Ширина документа
-          const height = width / aspectRatio; // Вычисляем соответствующую высоту
-          pdf.addImage(
-            image,
-            "JPEG",
-            0, // X координата
-            0, // Y координата
-            width, // Новая ширина
-            height // Новая высота
-          );
+          const width = pdf.internal.pageSize.getWidth();
+          const height = width / aspectRatio;
+          pdf.addImage(image, "JPEG", 0, 0, width, height);
 
           if (i === loadedImages.length - 1) {
             pdf.save("images.pdf");
@@ -88,6 +90,8 @@ export const App = () => {
         console.error("Ошибка при загрузке изображения:", error);
       });
   };
+
+  if (isLoading) return <div style={{ textAlign: "center" }}>Loading...</div>;
 
   return (
     <div style={{ textAlign: "center" }}>
@@ -117,11 +121,16 @@ export const App = () => {
       >
         Generate PDF
       </button>
-      <div
-        style={{ display: "flex", justifyContent: "center", flexWrap: "wrap" }}
-      >
+      <div>
         {images.map((image, i) => (
-          <div key={i} style={{ margin: "10px", textAlign: "center" }}>
+          <div
+            key={i}
+            style={{
+              margin: "10px",
+              textAlign: "center",
+              position: "relative",
+            }}
+          >
             <img
               src={image}
               alt={`image-${i}`}
@@ -130,6 +139,17 @@ export const App = () => {
                 display: "block",
                 borderRadius: "8px",
                 boxShadow: "0px 4px 6px rgba(0, 0, 0, 0.1)",
+                cursor: "move",
+              }}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("index", String(i));
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const dragIndex = e.dataTransfer.getData("index");
+                handleImageReorder(+dragIndex, i);
               }}
             />
           </div>
